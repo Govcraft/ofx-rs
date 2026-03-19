@@ -2,8 +2,16 @@
 name = "ofx-rs"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
 description = "A Rust library for parsing Open Financial Exchange (OFX) documents"
 license = "MIT"
+authors = ["Roland Rodriguez <roland@govcraft.ai>"]
+repository = "https://github.com/Govcraft/ofx-rs"
+homepage = "https://github.com/Govcraft/ofx-rs"
+documentation = "https://docs.rs/ofx-rs"
+readme = "README.md"
+keywords = ["ofx", "finance", "banking", "parser", "sgml"]
+categories = ["finance", "parser-implementations"]
 
 [dependencies]
 quick-xml = "0.39.2"
