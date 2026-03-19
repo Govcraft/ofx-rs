@@ -1,3 +1,6 @@
+#![forbid(unsafe_code)]
+#![deny(clippy::unwrap_used, clippy::expect_used)]
+
 //! `ofx-rs` -- A Rust library for parsing Open Financial Exchange (OFX) documents.
 //!
 //! This library provides a pure functional parser for OFX 1.x and 2.x documents.

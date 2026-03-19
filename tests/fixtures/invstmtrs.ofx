@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<?OFX OFXHEADER="200" VERSION="200" SECURITY="NONE" OLDFILEUID="NONE" NEWFILEUID="NONE"?>
+
+<OFX>
+    <SIGNONMSGSRSV1>
+        <SONRS>
+            <STATUS>
+                <CODE>0</CODE>
+                <SEVERITY>INFO</SEVERITY>
+            </STATUS>
+            <DTSERVER>20051029101003</DTSERVER>
+            <LANGUAGE>ENG</LANGUAGE>
+            <DTPROFUP>19991029101003</DTPROFUP>
+            <DTACCTUP>20031029101003</DTACCTUP>
+            <FI>
+                <ORG>NCH</ORG>
+                <FID>1001</FID>
+            </FI>
+        </SONRS>
+    </SIGNONMSGSRSV1>
+    <INVSTMTMSGSRSV1>
+        <INVSTMTTRNRS>
+            <TRNUID>1001</TRNUID>
+            <STATUS>
+                <CODE>0</CODE>
+                <SEVERITY>INFO</SEVERITY>
+            </STATUS>
+            <INVSTMTRS>
+                <DTASOF>20050827010000</DTASOF>
+                <CURDEF>USD</CURDEF>
+                <INVACCTFROM>
+                    <BROKERID>121099999</BROKERID>
+                    <ACCTID>999988</ACCTID>
+                </INVACCTFROM>
+                <INVTRANLIST>
+                    <DTSTART>20050824130105</DTSTART>
+                    <DTEND>20050828101000</DTEND>
+                    <BUYSTOCK>
+                        <INVBUY>
+                            <INVTRAN>
+                                <FITID>23321</FITID>
+                                <DTTRADE>20050825</DTTRADE>
+                                <DTSETTLE>20050828</DTSETTLE>
+                            </INVTRAN>
+                            <SECID>
+                                <UNIQUEID>123456789</UNIQUEID>
+                                <UNIQUEIDTYPE>CUSIP</UNIQUEIDTYPE>
+                            </SECID>
+                            <UNITS>100</UNITS>
+                            <UNITPRICE>50.00</UNITPRICE>
+                            <COMMISSION>25.00</COMMISSION>
+                            <TOTAL>-5025.00</TOTAL>
+                            <SUBACCTSEC>CASH</SUBACCTSEC>
+                            <SUBACCTFUND>CASH</SUBACCTFUND>
+                        </INVBUY>
+                        <BUYTYPE>BUY</BUYTYPE>
+                    </BUYSTOCK>
+                    <INVBANKTRAN>
+                        <STMTTRN>
+                            <TRNTYPE>CREDIT</TRNTYPE>
+                            <DTPOSTED>20050825</DTPOSTED>
+                            <DTUSER>20050825</DTUSER>
+                            <TRNAMT>1000.00</TRNAMT>
+                            <FITID>12345</FITID>
+                            <NAME>Customer deposit</NAME>
+                            <MEMO>Your check #1034</MEMO>
+                        </STMTTRN>
+                        <SUBACCTFUND>CASH</SUBACCTFUND>
+                    </INVBANKTRAN>
+                </INVTRANLIST>
+                <INVPOSLIST>
+                    <POSSTOCK>
+                        <INVPOS>
+                            <SECID>
+                                <UNIQUEID>123456789</UNIQUEID>
+                                <UNIQUEIDTYPE>CUSIP</UNIQUEIDTYPE>
+                            </SECID>
+                            <HELDINACCT>CASH</HELDINACCT>
+                            <POSTYPE>LONG</POSTYPE>
+                            <UNITS>200</UNITS>
+                            <UNITPRICE>49.50</UNITPRICE>
+                            <MKTVAL>9900.00</MKTVAL>
+                            <DTPRICEASOF>20050827010000</DTPRICEASOF>
+                            <MEMO>Next dividend payable Sept 1</MEMO>
+                        </INVPOS>
+                    </POSSTOCK>
+                </INVPOSLIST>
+                <INVBAL>
+                    <AVAILCASH>200.00</AVAILCASH>
+                    <MARGINBALANCE>-50.00</MARGINBALANCE>
+                    <SHORTBALANCE>0</SHORTBALANCE>
+                </INVBAL>
+            </INVSTMTRS>
+        </INVSTMTTRNRS>
+    </INVSTMTMSGSRSV1>
+</OFX>

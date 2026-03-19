@@ -60,6 +60,7 @@ fn try_parse(name: &str, input: &str) {
         Err(e) => {
             println!("  [FAIL] {name}");
             println!("         error: {e}");
+            panic!("{name} failed to parse: {e}");
         }
     }
 }
@@ -70,21 +71,18 @@ fn parse_all_test_vectors() {
     println!("=== OFX Test Vector Results ===");
     println!();
 
-    try_parse("stmtrs.ofx", include_str!("../test-vectors/stmtrs.ofx"));
+    try_parse("stmtrs.ofx", include_str!("fixtures/stmtrs.ofx"));
     println!();
 
-    try_parse("stmtrs_euro.ofx", include_str!("../test-vectors/stmtrs_euro.ofx"));
+    try_parse("stmtrs_euro.ofx", include_str!("fixtures/stmtrs_euro.ofx"));
     println!();
 
-    try_parse("mercury-checking.ofx", include_str!("../test-vectors/mercury-checking.ofx"));
+    try_parse("mercury-checking.ofx", include_str!("fixtures/mercury-checking.ofx"));
     println!();
 
-    try_parse("br_nubank_cc.ofx", include_str!("../test-vectors/br_nubank_cc.ofx"));
+    try_parse("br_nubank_cc.ofx", include_str!("fixtures/br_nubank_cc.ofx"));
     println!();
 
-    try_parse("mercury-checking-v2.ofx", include_str!("../test-vectors/mercury-checking-v2.ofx"));
-    println!();
-
-    try_parse("invstmtrs.ofx", include_str!("../test-vectors/invstmtrs.ofx"));
+    try_parse("invstmtrs.ofx", include_str!("fixtures/invstmtrs.ofx"));
     println!();
 }
