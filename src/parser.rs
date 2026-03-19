@@ -24,7 +24,15 @@ use crate::xml::{OfxReader, XmlError};
 pub fn parse(input: &str) -> Result<OfxDocument, OfxError> {
     let (ofx_header, xml_body) = header::parse_header(input)?;
     let xml_body = xml_body.trim();
-    parse_ofx_body(xml_body, ofx_header)
+
+    // OFX 1.x uses SGML where closing tags are optional. We need to normalize
+    // the body to well-formed XML before parsing.
+    if ofx_header.version().major() < 2 {
+        let normalized = crate::sgml::normalize_sgml_to_xml(xml_body);
+        parse_ofx_body(&normalized, ofx_header)
+    } else {
+        parse_ofx_body(xml_body, ofx_header)
+    }
 }
 
 // ---------------------------------------------------------------------------

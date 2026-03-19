@@ -71,9 +71,21 @@ impl FromStr for OfxAmount {
                 length: trimmed.len(),
             });
         }
-        let decimal = Decimal::from_str(trimmed).map_err(|_| InvalidOfxAmount::NotANumber {
-            value: trimmed.to_owned(),
-        })?;
+        // Some locales (e.g. Brazil, Europe) use comma as decimal separator.
+        // Normalize to dot for parsing. Only replace if there is no dot present
+        // (to avoid mangling values like "1,234.56" -- though OFX spec forbids
+        // thousands separators, real-world files may vary).
+        let normalized;
+        let parse_str = if trimmed.contains(',') && !trimmed.contains('.') {
+            normalized = trimmed.replace(',', ".");
+            &normalized
+        } else {
+            trimmed
+        };
+        let decimal =
+            Decimal::from_str(parse_str).map_err(|_| InvalidOfxAmount::NotANumber {
+                value: trimmed.to_owned(),
+            })?;
         Ok(Self(decimal))
     }
 }

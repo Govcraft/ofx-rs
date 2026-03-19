@@ -28,6 +28,7 @@ pub mod document;
 pub mod error;
 pub mod header;
 mod parser;
+mod sgml;
 pub mod types;
 pub mod xml;
 

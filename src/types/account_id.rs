@@ -1,10 +1,14 @@
 use super::validated_string::validated_string;
 
 validated_string!(
-    /// An OFX account identifier (max 22 characters).
+    /// An OFX account identifier.
+    ///
+    /// The OFX spec defines ACCTID as A-22, but real-world files from
+    /// institutions like Nubank use UUID-format identifiers (36 chars).
+    /// We accept up to 36 characters for compatibility.
     AccountId,
     InvalidAccountId,
-    22,
+    36,
     "account ID"
 );
 
@@ -19,15 +23,21 @@ mod tests {
     }
 
     #[test]
-    fn max_length_22_succeeds() {
-        let s = "a".repeat(22);
+    fn max_length_36_succeeds() {
+        let s = "a".repeat(36);
         assert!(s.parse::<AccountId>().is_ok());
     }
 
     #[test]
     fn exceeds_max_length_fails() {
-        let s = "a".repeat(23);
+        let s = "a".repeat(37);
         assert!(s.parse::<AccountId>().is_err());
+    }
+
+    #[test]
+    fn uuid_format_succeeds() {
+        let uuid = "11111111-UUID-UUID-UUID-111111111111";
+        assert!(uuid.parse::<AccountId>().is_ok());
     }
 
     #[test]
