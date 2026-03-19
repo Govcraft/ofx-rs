@@ -1,0 +1,14 @@
+[package]
+name = "ofx-rs"
+version = "0.1.0"
+edition = "2024"
+description = "A Rust library for parsing Open Financial Exchange (OFX) documents"
+license = "MIT"
+
+[dependencies]
+quick-xml = "0.39.2"
+rust_decimal = "1.40.0"
+time = "0.3.47"
+
+[dev-dependencies]
+proptest = "1.10.0"

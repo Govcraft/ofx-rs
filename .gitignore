@@ -17,3 +17,8 @@ Cargo.lock
 *.swp
 *.swo
 *~
+
+
+# Added by cargo
+
+/target
