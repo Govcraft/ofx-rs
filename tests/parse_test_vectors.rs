@@ -82,6 +82,9 @@ fn parse_all_test_vectors() {
     try_parse("br_nubank_cc.ofx", include_str!("../test-vectors/br_nubank_cc.ofx"));
     println!();
 
+    try_parse("mercury-checking-v2.ofx", include_str!("../test-vectors/mercury-checking-v2.ofx"));
+    println!();
+
     try_parse("invstmtrs.ofx", include_str!("../test-vectors/invstmtrs.ofx"));
     println!();
 }
