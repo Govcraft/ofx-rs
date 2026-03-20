@@ -2,6 +2,7 @@ use crate::header::OfxHeader;
 
 use super::banking_message_set::BankingMessageSet;
 use super::cc_message_set::CreditCardMessageSet;
+use super::investment_message_set::InvestmentMessageSet;
 use super::signon_response::SignonResponse;
 
 /// A parsed OFX document, containing the header, signon response, and
@@ -12,6 +13,7 @@ pub struct OfxDocument {
     signon: SignonResponse,
     banking: Option<BankingMessageSet>,
     credit_card: Option<CreditCardMessageSet>,
+    investment: Option<InvestmentMessageSet>,
 }
 
 impl OfxDocument {
@@ -23,6 +25,7 @@ impl OfxDocument {
             signon,
             banking: None,
             credit_card: None,
+            investment: None,
         }
     }
 
@@ -37,6 +40,13 @@ impl OfxDocument {
     #[must_use]
     pub fn with_credit_card(mut self, cc: CreditCardMessageSet) -> Self {
         self.credit_card = Some(cc);
+        self
+    }
+
+    /// Sets the investment message set.
+    #[must_use]
+    pub fn with_investment(mut self, investment: InvestmentMessageSet) -> Self {
+        self.investment = Some(investment);
         self
     }
 
@@ -62,5 +72,11 @@ impl OfxDocument {
     #[must_use]
     pub const fn credit_card(&self) -> Option<&CreditCardMessageSet> {
         self.credit_card.as_ref()
+    }
+
+    /// Returns the investment message set, if present.
+    #[must_use]
+    pub const fn investment(&self) -> Option<&InvestmentMessageSet> {
+        self.investment.as_ref()
     }
 }

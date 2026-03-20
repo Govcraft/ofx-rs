@@ -45,13 +45,13 @@ impl TransactionList {
 
     /// Returns the number of transactions.
     #[must_use]
-    pub const fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.transactions.len()
     }
 
     /// Returns true if there are no transactions.
     #[must_use]
-    pub const fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.transactions.is_empty()
     }
 }

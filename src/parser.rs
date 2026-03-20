@@ -2,11 +2,11 @@ use quick_xml::events::Event;
 
 use crate::aggregates::{
     AvailableBalance, Balance, BankAccount, CcStatementResponse, CreditCardAccount, CurrencyInfo,
-    LedgerBalance, Payee, StatementResponse, StatementTransactionBuilder, Status,
-    TransactionList, TransactionWrapper,
+    InvStatementResponse, InvestmentAccount, LedgerBalance, Payee, StatementResponse,
+    StatementTransactionBuilder, Status, TransactionList, TransactionWrapper,
 };
 use crate::document::{
-    BankingMessageSet, CreditCardMessageSet, OfxDocument, SignonResponse,
+    BankingMessageSet, CreditCardMessageSet, InvestmentMessageSet, OfxDocument, SignonResponse,
 };
 use crate::error::OfxError;
 use crate::header::{self, OfxHeader};
@@ -74,6 +74,7 @@ fn parse_ofx_body(xml: &str, header: OfxHeader) -> Result<OfxDocument, OfxError>
     let mut signon: Option<SignonResponse> = None;
     let mut banking: Option<BankingMessageSet> = None;
     let mut credit_card: Option<CreditCardMessageSet> = None;
+    let mut investment: Option<InvestmentMessageSet> = None;
 
     // Find and enter the <OFX> root element
     loop {
@@ -105,6 +106,9 @@ fn parse_ofx_body(xml: &str, header: OfxHeader) -> Result<OfxDocument, OfxError>
                     "CREDITCARDMSGSRSV1" => {
                         credit_card = Some(parse_cc_message_set(&mut reader)?);
                     }
+                    "INVSTMTMSGSRSV1" => {
+                        investment = Some(parse_investment_message_set(&mut reader)?);
+                    }
                     _ => {
                         reader.skip_element(&name)?;
                     }
@@ -127,6 +131,9 @@ fn parse_ofx_body(xml: &str, header: OfxHeader) -> Result<OfxDocument, OfxError>
     }
     if let Some(cc) = credit_card {
         doc = doc.with_credit_card(cc);
+    }
+    if let Some(inv) = investment {
+        doc = doc.with_investment(inv);
     }
 
     Ok(doc)
@@ -1142,6 +1149,260 @@ fn parse_ccstmtrs(reader: &mut OfxReader<'_>) -> Result<CcStatementResponse, Ofx
     }
 
     Ok(stmt)
+}
+
+// ---------------------------------------------------------------------------
+// Investment message set
+// ---------------------------------------------------------------------------
+
+fn parse_investment_message_set(
+    reader: &mut OfxReader<'_>,
+) -> Result<InvestmentMessageSet, OfxError> {
+    let mut responses = Vec::new();
+
+    loop {
+        match reader.next_event()? {
+            Event::Start(e) => {
+                let name = tag_name(&e);
+                if name == "INVSTMTTRNRS" {
+                    responses.push(parse_invstmttrnrs(reader)?);
+                } else {
+                    reader.skip_element(&name)?;
+                }
+            }
+            Event::End(e) if end_tag_name(&e) == "INVSTMTMSGSRSV1" => break,
+            Event::Eof => {
+                return Err(XmlError::MalformedXml {
+                    message: "unexpected EOF in INVSTMTMSGSRSV1".to_owned(),
+                }
+                .into());
+            }
+            _ => {}
+        }
+    }
+
+    Ok(InvestmentMessageSet::new(responses))
+}
+
+fn parse_invstmttrnrs(
+    reader: &mut OfxReader<'_>,
+) -> Result<TransactionWrapper<InvStatementResponse>, OfxError> {
+    let mut trnuid: Option<String> = None;
+    let mut status: Option<Status> = None;
+    let mut client_cookie: Option<String> = None;
+    let mut invstmtrs: Option<InvStatementResponse> = None;
+
+    loop {
+        match reader.next_event()? {
+            Event::Start(e) => {
+                let name = tag_name(&e);
+                match name.as_str() {
+                    "TRNUID" => trnuid = Some(read_text(reader, "TRNUID")?),
+                    "STATUS" => status = Some(parse_status(reader)?),
+                    "CLTCOOKIE" => client_cookie = Some(read_text(reader, "CLTCOOKIE")?),
+                    "INVSTMTRS" => invstmtrs = Some(parse_invstmtrs(reader)?),
+                    _ => reader.skip_element(&name)?,
+                }
+            }
+            Event::End(e) if end_tag_name(&e) == "INVSTMTTRNRS" => break,
+            Event::Eof => {
+                return Err(XmlError::MalformedXml {
+                    message: "unexpected EOF in INVSTMTTRNRS".to_owned(),
+                }
+                .into());
+            }
+            _ => {}
+        }
+    }
+
+    let trnuid = trnuid.ok_or_else(|| XmlError::MissingElement {
+        parent: "INVSTMTTRNRS".to_owned(),
+        element: "TRNUID".to_owned(),
+    })?;
+    let status = status.ok_or_else(|| XmlError::MissingElement {
+        parent: "INVSTMTTRNRS".to_owned(),
+        element: "STATUS".to_owned(),
+    })?;
+
+    let mut wrapper = TransactionWrapper::new(trnuid, status, invstmtrs);
+    if let Some(cookie) = client_cookie {
+        wrapper = wrapper.with_client_cookie(cookie);
+    }
+    Ok(wrapper)
+}
+
+fn parse_invstmtrs(reader: &mut OfxReader<'_>) -> Result<InvStatementResponse, OfxError> {
+    let mut curdef: Option<crate::types::CurrencyCode> = None;
+    let mut inv_acct: Option<InvestmentAccount> = None;
+    let mut transaction_list: Option<TransactionList> = None;
+
+    loop {
+        match reader.next_event()? {
+            Event::Start(e) => {
+                let name = tag_name(&e);
+                match name.as_str() {
+                    "CURDEF" => {
+                        let text = read_text(reader, "CURDEF")?;
+                        curdef = Some(parse_text_as(&text, "CURDEF")?);
+                    }
+                    "INVACCTFROM" => {
+                        inv_acct = Some(parse_investment_account(reader)?);
+                    }
+                    "INVTRANLIST" => {
+                        transaction_list = Some(parse_inv_transaction_list(reader)?);
+                    }
+                    _ => reader.skip_element(&name)?,
+                }
+            }
+            Event::End(e) if end_tag_name(&e) == "INVSTMTRS" => break,
+            Event::Eof => {
+                return Err(XmlError::MalformedXml {
+                    message: "unexpected EOF in INVSTMTRS".to_owned(),
+                }
+                .into());
+            }
+            _ => {}
+        }
+    }
+
+    let curdef = curdef.ok_or_else(|| XmlError::MissingElement {
+        parent: "INVSTMTRS".to_owned(),
+        element: "CURDEF".to_owned(),
+    })?;
+    let inv_acct = inv_acct.ok_or_else(|| XmlError::MissingElement {
+        parent: "INVSTMTRS".to_owned(),
+        element: "INVACCTFROM".to_owned(),
+    })?;
+
+    let mut stmt = InvStatementResponse::new(curdef, inv_acct);
+    if let Some(tl) = transaction_list {
+        stmt = stmt.with_transaction_list(tl);
+    }
+
+    Ok(stmt)
+}
+
+fn parse_investment_account(reader: &mut OfxReader<'_>) -> Result<InvestmentAccount, OfxError> {
+    let mut broker_id: Option<String> = None;
+    let mut acct_id: Option<crate::types::AccountId> = None;
+
+    loop {
+        match reader.next_event()? {
+            Event::Start(e) => {
+                let name = tag_name(&e);
+                match name.as_str() {
+                    "BROKERID" => broker_id = Some(read_text(reader, "BROKERID")?),
+                    "ACCTID" => {
+                        let text = read_text(reader, "ACCTID")?;
+                        acct_id = Some(parse_text_as(&text, "ACCTID")?);
+                    }
+                    _ => reader.skip_element(&name)?,
+                }
+            }
+            Event::End(e) if end_tag_name(&e) == "INVACCTFROM" => break,
+            Event::Eof => {
+                return Err(XmlError::MalformedXml {
+                    message: "unexpected EOF in INVACCTFROM".to_owned(),
+                }
+                .into());
+            }
+            _ => {}
+        }
+    }
+
+    let broker_id = broker_id.ok_or_else(|| XmlError::MissingElement {
+        parent: "INVACCTFROM".to_owned(),
+        element: "BROKERID".to_owned(),
+    })?;
+    let acct_id = acct_id.ok_or_else(|| XmlError::MissingElement {
+        parent: "INVACCTFROM".to_owned(),
+        element: "ACCTID".to_owned(),
+    })?;
+
+    Ok(InvestmentAccount::new(broker_id, acct_id))
+}
+
+/// Parses INVTRANLIST, extracting only INVBANKTRAN/STMTTRN banking transactions.
+/// Investment-specific transactions (BUYSTOCK, SELLSTOCK, etc.) are skipped.
+fn parse_inv_transaction_list(reader: &mut OfxReader<'_>) -> Result<TransactionList, OfxError> {
+    let mut dtstart: Option<crate::types::OfxDateTime> = None;
+    let mut dtend: Option<crate::types::OfxDateTime> = None;
+    let mut transactions = Vec::new();
+
+    loop {
+        match reader.next_event()? {
+            Event::Start(e) => {
+                let name = tag_name(&e);
+                match name.as_str() {
+                    "DTSTART" => {
+                        let text = read_text(reader, "DTSTART")?;
+                        dtstart = Some(parse_text_as(&text, "DTSTART")?);
+                    }
+                    "DTEND" => {
+                        let text = read_text(reader, "DTEND")?;
+                        dtend = Some(parse_text_as(&text, "DTEND")?);
+                    }
+                    "INVBANKTRAN" => {
+                        if let Some(txn) = parse_invbanktran(reader)? {
+                            transactions.push(txn);
+                        }
+                    }
+                    _ => reader.skip_element(&name)?,
+                }
+            }
+            Event::End(e) if end_tag_name(&e) == "INVTRANLIST" => break,
+            Event::Eof => {
+                return Err(XmlError::MalformedXml {
+                    message: "unexpected EOF in INVTRANLIST".to_owned(),
+                }
+                .into());
+            }
+            _ => {}
+        }
+    }
+
+    let dtstart = dtstart.ok_or_else(|| XmlError::MissingElement {
+        parent: "INVTRANLIST".to_owned(),
+        element: "DTSTART".to_owned(),
+    })?;
+    let dtend = dtend.ok_or_else(|| XmlError::MissingElement {
+        parent: "INVTRANLIST".to_owned(),
+        element: "DTEND".to_owned(),
+    })?;
+
+    Ok(TransactionList::new(dtstart, dtend, transactions))
+}
+
+/// Parses an INVBANKTRAN element, extracting the STMTTRN inside it.
+/// Returns `None` if no STMTTRN is found (defensive, but shouldn't happen
+/// in well-formed OFX).
+fn parse_invbanktran(
+    reader: &mut OfxReader<'_>,
+) -> Result<Option<crate::aggregates::StatementTransaction>, OfxError> {
+    let mut transaction = None;
+
+    loop {
+        match reader.next_event()? {
+            Event::Start(e) => {
+                let name = tag_name(&e);
+                if name == "STMTTRN" {
+                    transaction = Some(parse_statement_transaction(reader)?);
+                } else {
+                    reader.skip_element(&name)?;
+                }
+            }
+            Event::End(e) if end_tag_name(&e) == "INVBANKTRAN" => break,
+            Event::Eof => {
+                return Err(XmlError::MalformedXml {
+                    message: "unexpected EOF in INVBANKTRAN".to_owned(),
+                }
+                .into());
+            }
+            _ => {}
+        }
+    }
+
+    Ok(transaction)
 }
 
 #[cfg(test)]
