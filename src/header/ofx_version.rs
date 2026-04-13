@@ -67,6 +67,23 @@ impl FromStr for OfxVersion {
         let minor = u8::try_from(chars[1].to_digit(10).ok_or_else(make_err)?).map_err(|_| make_err())?;
         let patch = u8::try_from(chars[2].to_digit(10).ok_or_else(make_err)?).map_err(|_| make_err())?;
 
+        // Only accept known OFX versions to prevent silent misparsing
+        const KNOWN_VERSIONS: &[(u8, u8, u8)] = &[
+            (1, 0, 2), // 102
+            (1, 5, 1), // 151
+            (1, 6, 0), // 160
+            (2, 0, 0), // 200
+            (2, 0, 1), // 201
+            (2, 0, 2), // 202
+            (2, 1, 1), // 211
+            (2, 2, 0), // 220
+            (2, 3, 0), // 230
+        ];
+
+        if !KNOWN_VERSIONS.contains(&(major, minor, patch)) {
+            return Err(make_err());
+        }
+
         Ok(Self {
             major,
             minor,
@@ -137,5 +154,13 @@ mod tests {
         assert!(v102 < v200);
         assert!(v200 < v202);
         assert!(v202 < v220);
+    }
+
+    #[test]
+    fn unknown_version_rejected() {
+        // Regression: "999" was accepted as a valid version
+        assert!("999".parse::<OfxVersion>().is_err());
+        assert!("100".parse::<OfxVersion>().is_err());
+        assert!("210".parse::<OfxVersion>().is_err());
     }
 }
