@@ -115,7 +115,12 @@ fn parse_ofx_body(xml: &str, header: OfxHeader) -> Result<OfxDocument, OfxError>
                 }
             }
             Event::End(e) if end_tag_name(&e) == "OFX" => break,
-            Event::Eof => break,
+            Event::Eof => {
+                return Err(XmlError::MalformedXml {
+                    message: "unexpected EOF: missing closing </OFX> tag".to_owned(),
+                }
+                .into());
+            }
             _ => {}
         }
     }

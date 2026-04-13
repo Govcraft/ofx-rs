@@ -3,6 +3,20 @@ use quick_xml::Reader;
 
 use super::XmlError;
 
+/// Resolve a predefined XML entity name to its character.
+fn resolve_entity(name: &str) -> Result<char, XmlError> {
+    match name {
+        "amp" => Ok('&'),
+        "lt" => Ok('<'),
+        "gt" => Ok('>'),
+        "quot" => Ok('"'),
+        "apos" => Ok('\''),
+        _ => Err(XmlError::MalformedXml {
+            message: format!("unknown entity reference: &{name};"),
+        }),
+    }
+}
+
 /// Result of reading an element's content: either text or nested children.
 enum TextOrChildren {
     Text(String),
@@ -19,8 +33,7 @@ impl<'a> OfxReader<'a> {
     /// Create a new reader from an XML string.
     #[must_use]
     pub fn new(xml: &'a str) -> Self {
-        let mut reader = Reader::from_reader(xml.as_bytes());
-        reader.config_mut().trim_text(true);
+        let reader = Reader::from_reader(xml.as_bytes());
         Self {
             reader,
             buf: Vec::with_capacity(256),
@@ -37,6 +50,9 @@ impl<'a> OfxReader<'a> {
             self.buf.clear();
             match self.reader.read_event_into(&mut self.buf) {
                 Ok(Event::Comment(_) | Event::Decl(_) | Event::PI(_)) => {},
+                Ok(Event::Text(ref t)) if t.iter().all(u8::is_ascii_whitespace) => {
+                    // Skip whitespace-only text events (equivalent to trim_text behavior)
+                }
                 Ok(event) => return Ok(event.into_owned()),
                 Err(e) => {
                     return Err(XmlError::MalformedXml {
@@ -61,10 +77,14 @@ impl<'a> OfxReader<'a> {
                 Event::Text(t) => {
                     text.push_str(&String::from_utf8_lossy(&t));
                 }
+                Event::GeneralRef(r) => {
+                    let entity_name = String::from_utf8_lossy(&r).to_string();
+                    text.push(resolve_entity(&entity_name)?);
+                }
                 Event::End(e) => {
                     let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
                     if name == tag_name {
-                        return Ok(text);
+                        return Ok(text.trim().to_owned());
                     }
                     return Err(XmlError::UnexpectedElement {
                         expected: tag_name.to_owned(),
@@ -97,12 +117,17 @@ impl<'a> OfxReader<'a> {
             match self.next_event()? {
                 Event::Start(_) => depth += 1,
                 Event::End(e) => {
-                    depth -= 1;
+                    depth = depth.saturating_sub(1);
                     if depth == 0 {
                         let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
                         if name == parent_tag {
                             return Ok(());
                         }
+                        return Err(XmlError::MalformedXml {
+                            message: format!(
+                                "mismatched closing tag: expected </{parent_tag}>, found </{name}>"
+                            ),
+                        });
                     }
                 }
                 Event::Eof => {
@@ -220,10 +245,14 @@ impl<'a> OfxReader<'a> {
                 Event::Text(t) => {
                     text.push_str(&String::from_utf8_lossy(&t));
                 }
+                Event::GeneralRef(r) => {
+                    let entity_name = String::from_utf8_lossy(&r).to_string();
+                    text.push(resolve_entity(&entity_name)?);
+                }
                 Event::End(e) => {
                     let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
                     if name == tag_name {
-                        return Ok(TextOrChildren::Text(text));
+                        return Ok(TextOrChildren::Text(text.trim().to_owned()));
                     }
                     // Unexpected end tag
                     return Err(XmlError::UnexpectedElement {
@@ -310,5 +339,39 @@ mod tests {
         assert_eq!(children.len(), 2);
         assert_eq!(children[0], ("CODE".to_owned(), "0".to_owned()));
         assert_eq!(children[1], ("SEVERITY".to_owned(), "INFO".to_owned()));
+    }
+
+    #[test]
+    fn xml_entities_unescaped() {
+        // Regression: &amp; was not decoded, producing "ATT Bank" instead of "AT&T Bank"
+        let xml = "<NAME>AT&amp;T Bank</NAME>";
+        let mut reader = OfxReader::new(xml);
+        match reader.next_event().unwrap() {
+            Event::Start(_) => {
+                let text = reader.read_text("NAME").unwrap();
+                assert_eq!(text, "AT&T Bank");
+            }
+            other => panic!("expected Start, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn xml_entities_unescaped_in_children() {
+        // Regression: entity decoding also applies in read_child_elements path
+        let xml = "<STATUS><CODE>0</CODE><MESSAGE>Test &amp; Done</MESSAGE></STATUS>";
+        let mut reader = OfxReader::new(xml);
+        let _ = reader.next_event().unwrap();
+        let children = reader.read_child_elements("STATUS").unwrap();
+        assert_eq!(children[1], ("MESSAGE".to_owned(), "Test & Done".to_owned()));
+    }
+
+    #[test]
+    fn skip_to_end_mismatched_tag_returns_error() {
+        // Regression: skip_to_end silently overshot when closing tag didn't match parent
+        let xml = "<PARENT><CHILD>text</CHILD></WRONG></PARENT>";
+        let mut reader = OfxReader::new(xml);
+        let _ = reader.next_event().unwrap(); // consume <PARENT>
+        let result = reader.skip_to_end("PARENT");
+        assert!(result.is_err(), "expected error for mismatched closing tag");
     }
 }

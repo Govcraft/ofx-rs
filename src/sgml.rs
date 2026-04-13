@@ -224,8 +224,14 @@ pub fn normalize_sgml_to_xml(input: &str) -> String {
                 );
             }
         } else {
-            pending_text.push(input.as_bytes()[pos] as char);
-            pos += 1;
+            // Advance by full UTF-8 character to avoid corrupting multi-byte sequences.
+            // Safety: pos < len guarantees at least one char remains.
+            if let Some(ch) = input[pos..].chars().next() {
+                pending_text.push(ch);
+                pos += ch.len_utf8();
+            } else {
+                pos += 1;
+            }
         }
     }
 
@@ -464,5 +470,26 @@ mod tests {
         assert!(result.contains("</SONRS>"));
         assert!(result.contains("</SIGNONMSGSRSV1>"));
         assert!(result.contains("<BANKMSGSRSV1>"));
+    }
+
+    #[test]
+    fn multibyte_utf8_preserved() {
+        // Regression: byte-as-char loop corrupted multi-byte UTF-8 like "é" (0xC3 0xA9)
+        let input = "<NAME>Café Bank\n";
+        let result = normalize_sgml_to_xml(input);
+        assert!(
+            result.contains("<NAME>Café Bank</NAME>"),
+            "UTF-8 corrupted, got: {result}"
+        );
+    }
+
+    #[test]
+    fn cjk_utf8_preserved() {
+        let input = "<NAME>中文银行\n";
+        let result = normalize_sgml_to_xml(input);
+        assert!(
+            result.contains("<NAME>中文银行</NAME>"),
+            "CJK UTF-8 corrupted, got: {result}"
+        );
     }
 }

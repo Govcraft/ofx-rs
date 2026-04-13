@@ -121,7 +121,17 @@ fn parse_xml_pi_header(input: &str) -> Result<(OfxHeader, &str), HeaderError> {
 /// Handles both quoted (`VERSION="220"`) and unquoted (`VERSION=220`) forms.
 fn extract_pi_attribute<'a>(content: &'a str, name: &str) -> Option<&'a str> {
     let search = format!("{name}=");
-    let start = content.find(&search)?;
+    // Find the attribute, ensuring it's preceded by whitespace or start-of-string
+    // to avoid matching a suffix like "XVERSION=" when searching for "VERSION=".
+    let mut search_from = 0;
+    let start = loop {
+        let idx = content[search_from..].find(&search)?;
+        let absolute_idx = search_from + idx;
+        if absolute_idx == 0 || content.as_bytes()[absolute_idx - 1].is_ascii_whitespace() {
+            break absolute_idx;
+        }
+        search_from = absolute_idx + 1;
+    };
     let after_eq = &content[start + search.len()..];
 
     if after_eq.starts_with('"') {
@@ -318,6 +328,18 @@ mod tests {
         assert_eq!(
             body,
             "<OFX><SIGNONMSGSRSV1></SIGNONMSGSRSV1></OFX>"
+        );
+    }
+
+    #[test]
+    fn prefix_spoofing_uses_correct_attribute() {
+        // Regression: XVERSION="102" matched before VERSION="220" due to find()
+        let input = r#"<?OFX OFXHEADER="200" XVERSION="102" VERSION="220" SECURITY="NONE"?><OFX>"#;
+        let (header, _) = parse_header(input).unwrap();
+        assert_eq!(
+            header.version(),
+            "220".parse().unwrap(),
+            "should use VERSION, not XVERSION"
         );
     }
 }

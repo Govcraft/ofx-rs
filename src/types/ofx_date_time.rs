@@ -128,6 +128,13 @@ fn parse_offset(bracket_content: &str) -> Result<UtcOffset, InvalidOfxDateTime> 
             value: bracket_content.to_owned(),
         })?;
 
+    // Reject NaN and infinity
+    if !hours_f.is_finite() {
+        return Err(InvalidOfxDateTime::InvalidOffset {
+            value: bracket_content.to_owned(),
+        });
+    }
+
     // Convert fractional hours to total seconds, then to h/m/s components.
     // These values are bounded by valid UTC offsets (-26h..+26h), so the casts are safe.
     #[allow(clippy::cast_possible_truncation)]
@@ -162,6 +169,26 @@ fn parse_time_portion(remaining: &str) -> Result<(u8, u8, u8, u16), InvalidOfxDa
         (remaining, None),
         |dot_pos| (&remaining[..dot_pos], Some(&remaining[dot_pos + 1..])),
     );
+
+    // Time digits must come in pairs (HH, HHMM, HHMMSS); reject odd lengths
+    if !time_digits.is_empty() && time_digits.len() % 2 != 0 {
+        return Err(InvalidOfxDateTime::InvalidFormat {
+            detail: format!(
+                "time portion must have even number of digits (HH, HHMM, or HHMMSS), got {} digits",
+                time_digits.len()
+            ),
+        });
+    }
+
+    // Reject extra digits beyond HHMMSS (6 digits max)
+    if time_digits.len() > 6 {
+        return Err(InvalidOfxDateTime::InvalidFormat {
+            detail: format!(
+                "time portion too long: expected at most 6 digits (HHMMSS), got {}",
+                time_digits.len()
+            ),
+        });
+    }
 
     let h = if time_digits.len() >= 2 {
         let v = parse_digits(time_digits, 0, 2, "hour")?;
@@ -234,6 +261,13 @@ impl FromStr for OfxDateTime {
                 let bracket_end = s.find(']').ok_or_else(|| InvalidOfxDateTime::InvalidOffset {
                     value: s[bracket_start..].to_owned(),
                 })?;
+                // Reject trailing content after the closing bracket
+                let after_bracket = s[bracket_end + 1..].trim();
+                if !after_bracket.is_empty() {
+                    return Err(InvalidOfxDateTime::InvalidFormat {
+                        detail: format!("unexpected trailing content after timezone: '{after_bracket}'"),
+                    });
+                }
                 let bracket_content = &s[bracket_start + 1..bracket_end];
                 let offset = parse_offset(bracket_content)?;
                 Ok((&s[..bracket_start], offset))
@@ -495,5 +529,45 @@ mod tests {
         let earlier: OfxDateTime = "20230101".parse().unwrap();
         let later: OfxDateTime = "20230201".parse().unwrap();
         assert!(earlier < later);
+    }
+
+    #[test]
+    fn odd_length_time_rejected() {
+        // Regression: "202301151" (9 chars = 8 date + 1 time digit) was accepted
+        assert!(
+            "202301151".parse::<OfxDateTime>().is_err(),
+            "odd-length time portion should be rejected"
+        );
+        assert!(
+            "20230115123".parse::<OfxDateTime>().is_err(),
+            "3-digit time portion should be rejected"
+        );
+    }
+
+    #[test]
+    fn trailing_content_after_bracket_rejected() {
+        // Regression: "20230115120000[-5]junk" was silently accepted
+        assert!(
+            "20230115120000[-5]junk".parse::<OfxDateTime>().is_err(),
+            "trailing content after ] should be rejected"
+        );
+    }
+
+    #[test]
+    fn nan_offset_rejected() {
+        // Regression: NaN parsed as 0 offset
+        assert!(
+            "20230115120000[NaN]".parse::<OfxDateTime>().is_err(),
+            "NaN offset should be rejected"
+        );
+    }
+
+    #[test]
+    fn excess_time_digits_rejected() {
+        // More than 6 time digits (HHMMSS) should be rejected
+        assert!(
+            "2023011512345678".parse::<OfxDateTime>().is_err(),
+            "8 time digits should be rejected"
+        );
     }
 }
